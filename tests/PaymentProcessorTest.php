@@ -30,6 +30,7 @@ final class PaymentProcessorTest extends TestCase
 
         $payment = new Payment(1, PaymentStatus::Prepared->value);
         $result = $processor->process($payment, $this->mockRequiredData());
+        $this->log('  mock: SUCCESS / SETTLED → ' . $result->status->value);
 
         self::assertSame(PaymentStatus::Success, $result->status);
         self::assertSame(PaymentStatus::Success->value, $payment->status);
@@ -47,6 +48,7 @@ final class PaymentProcessorTest extends TestCase
 
         $payment = new Payment(1, PaymentStatus::Prepared->value);
         $result = $processor->process($payment, $this->mockRequiredData());
+        $this->log('  mock: DECLINED → ' . $result->status->value . ' | ' . $result->message);
 
         self::assertSame(PaymentStatus::Failed, $result->status);
         self::assertSame(PaymentStatus::Failed->value, $payment->status);
@@ -67,6 +69,8 @@ final class PaymentProcessorTest extends TestCase
 
         $payment = new Payment(1, PaymentStatus::Prepared->value);
         $result = $processor->process($payment, $this->mockRequiredData());
+        $redirectUrl = $result->redirectData !== null ? $result->redirectData['url'] : '';
+        $this->log('  mock: REDIRECT → ' . $result->status->value . ' | url=' . $redirectUrl);
 
         self::assertSame(PaymentStatus::Redirect, $result->status);
         self::assertSame(PaymentStatus::Redirect->value, $payment->status);
@@ -86,9 +90,16 @@ final class PaymentProcessorTest extends TestCase
 
         $payment = new Payment(1, PaymentStatus::Prepared->value);
         $result = $processor->process($payment, $this->mockRequiredData());
+        $this->log('  mock: SUCCESS / PENDING → ' . $result->status->value);
 
         self::assertSame(PaymentStatus::Waiting, $result->status);
         self::assertSame(PaymentStatus::Waiting->value, $payment->status);
+    }
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->log($this->name());
     }
 
     private function buildRegistry(): PaymentHandlerRegistry
@@ -105,6 +116,11 @@ final class PaymentProcessorTest extends TestCase
     private function makeSaleResponse(array $response): SaleResponse
     {
         return SaleResponse::fromArray($response);
+    }
+
+    private function log(string $message): void
+    {
+        fwrite(STDERR, '[PaymentProcessorTest] ' . $message . PHP_EOL);
     }
 
     private function mockRequiredData(): array
