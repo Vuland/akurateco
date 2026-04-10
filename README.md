@@ -1,138 +1,52 @@
-# Процесинг оплат (Rafinita SALE)
+# Rafinita SALE (PHP)
 
-Невелика бібліотека для **SALE**-запиту до Rafinita API: збір даних платежу, підпис, HTTP-виклик, розбір відповіді та **чотири сценарії** — success, declined, redirect, waiting — через набір обробників і реєстр.
+## 1. Встановлення
 
-Каркас перевірявся на **Linux**; з Windows зручно працювати через **WSL2** або Docker Desktop.
-
----
-
-## Технології
-
-| Що | Навіщо |
-|----|--------|
-| **PHP 8.1+** | `readonly`, enums, строга типізація |
-| **Composer** | автозавантаження PSR-4, залежності |
-| **Guzzle 7** | HTTP-клієнт до `dev-api.rafinita.com` |
-| **PHPUnit 10** | тести процесора з моком шлюзу |
-| **webmozart/assert** | перевірки на вході DTO |
-| **Docker Compose** | однакове середовище для всіх |
-
-Стиль коду орієнтований на **PSR-12** (відступи, `declare(strict_types=1)`, іменування).
-
----
-
-## Патерни та підходи
-
-1. **Strategy** — інтерфейс `PaymentHandlerInterface` (`canHandle` + `handle`); конкретні стратегії: `SuccessPaymentHandler`, `FailedPaymentHandler`, `PendingPaymentHandler`, `RedirectPaymentHandler`.
-2. **Registry** — `PaymentHandlerRegistry` зберігає список обробників і підбирає перший, який підходить до відповіді шлюзу.
-3. **Gateway / anti-corruption** — `PaymentGatewayClient` інкапсулює форму запиту, hash і JSON-відповідь; залежність через `PaymentGatewayClientInterface` (зручно підміняти в тестах).
-4. **DTO** — `PaymentRequest`, `SaleResponse`, `ProcessingResult` переносять дані без логіки домену.
-5. **Dependency injection (конструктор)** — `PaymentProcessor` отримує реєстр і (опційно) клієнт шлюзу.
-
-Додатково (плюс до ТЗ): **return customer flow** — `ReturnCustomerFlowService` + `ReturnCustomerFlowResult` для callback-нотифікацій.
-
----
-
-## Ключі та змінні середовища
-
-Скопіюй `.env.example` у `.env` і заповни (або залиш значення з тестового завдання):
-
-| Змінна | Призначення |
-|--------|-------------|
-| `RAFINITA_PUBLIC_KEY` | Public Key (client_key) |
-| `RAFINITA_PASS` | пароль для розрахунку `hash` |
-| `RAFINITA_API_URL` | URL endpoint POST |
-
-**З ТЗ (dev, щоб не губити):**
-
-```env
-RAFINITA_PUBLIC_KEY=5b6492f0-f8f5-11ea-976a-0242c0a85007
-RAFINITA_PASS=d0ec0beca8a3c30652746925d5380cf3
-RAFINITA_API_URL=https://dev-api.rafinita.com/post
-```
-
-> Не коміть `.env` у репозиторій. Для продакшену ці значення мають бути лише в секретах оточення.
-
-Docker уже підхоплює `.env` через `env_file` у `docker-compose.yml`.
-
----
-
-## Як запускати
-
-### 1. Перший раз (збірка + залежності)
+**Docker**
 
 ```bash
-make init
-```
-
-Це збирає образ і виконує `composer install` у контейнері.
-
-### 2. Запуск контейнера
-
-```bash
+cp .env.example .env   # треба заповнити RAFINITA_* константи
+make init             
 make start
 ```
 
-### 3. Shell усередині контейнера
+---
+
+## 2. Make
+
+| Команда | Дія |
+|---------|-----|
+| `make init` | `docker compose build` + `composer install` |
+| `make start` | `docker compose up -d` |
+| `make stop` | `docker compose down` |
+| `make restart` | `stop` + `start` |
+| `make ssh` | shell у сервісі `app` |
+| `make composer ARGS="…"` | `composer …` у контейнері |
+
+---
+
+## 3. Тести та приклад
+
+У контейнері (`make ssh`) або `docker compose exec app sh`:
 
 ```bash
-make ssh
+composer test     
+composer example   
 ```
 
-### 4. Тести та приклад
+Без Composer-скриптів:
 
-Усередині контейнера (або `docker compose exec app sh`):
-
-```sh
-composer test              # PHPUnit
-composer example           # php example_usage.php (потрібні змінні RAFINITA_* у .env)
-```
-
-Або напряму:
-
-```sh
+```bash
 vendor/bin/phpunit
 php example_usage.php
 ```
 
-### Корисні команди Make
-
-| Команда | Дія |
-|---------|-----|
-| `make init` | build + `composer install` |
-| `make start` | `docker compose up -d` |
-| `make stop` | зупинити контейнери |
-| `make ssh` | інтерактивна оболонка в сервісі `app` |
-| `make composer ARGS="..."` | довільна команда Composer |
-
-### Без Make
-
-```bash
-docker compose build
-docker compose run --rm app composer install
-docker compose up -d
-docker compose exec app sh -lc 'vendor/bin/phpunit && php example_usage.php'
-```
-
 ---
 
-## Структура `src/` (орієнтир ТЗ)
+## 4. Підходи та бібліотеки, які використав
 
-```
-src/
-├── DTO/
-├── Entity/
-├── Handlers/
-├── Registry/
-├── Services/
-├── Enum/
-└── PaymentProcessor.php
-```
-
-Додатково: `SaleResponse.php`, інтерфейс клієнта шлюзу, сервіси return flow.
-
----
-
-## Приклад використання
-
-Див. **`example_usage.php`**: реєстрація обробників, `PaymentProcessor`, виклик `process()` з масивом сирих даних і вивід `ProcessingResult` (у т.ч. дані для HTML-форми редиректу).
+- Guzzle 7 — HTTP
+- webmozart/assert — валідація в DTO
+- Патерн Strategy — окремі обробники під тип відповіді шлюзу
+- обробник return customer flow починав накидувати, але не встигав по часу.
+- Також позалишав тудушки там, де можна було б поімпрувати, валідація наприклад
